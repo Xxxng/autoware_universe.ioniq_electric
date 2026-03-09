@@ -14,13 +14,13 @@
 
     roi_overlay_segment_label:
       UNKNOWN : true
-      CAR : false
-      TRUCK : false
-      BUS : false
+      CAR : true
+      TRUCK : true
+      BUS : true
       MOTORCYCLE : true
       BICYCLE : true
       PEDESTRIAN : true
-      ANIMAL: true
+      ANIMAL: false
 
     model_path: "$(var data_path)/tensorrt_yolox/$(var model_name).onnx" # The onnx file name for YOLOX model.
     label_path: "$(var data_path)/tensorrt_yolox/label.txt" # The label file path for YOLOX model.

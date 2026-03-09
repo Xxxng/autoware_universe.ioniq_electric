@@ -104,7 +104,7 @@ FusionNode<Msg3D, Msg2D, ExportObj>::FusionNode(
   }
 
   // subscribe 3d detection
-  std::function<void(const typename Msg3D::ConstSharedPtr msg)> sub_callback =
+std::function<void(const typename Msg3D::ConstSharedPtr msg)> sub_callback =
     std::bind(&FusionNode::subCallback, this, std::placeholders::_1);
   det3d_sub_ =
     this->create_subscription<Msg3D>("input", rclcpp::QoS(1).best_effort(), sub_callback);
@@ -278,7 +278,6 @@ void FusionNode<Msg3D, Msg2D, ExportObj>::subCallback(
     // message may processed partially with arrived 2d rois
     stop_watch_ptr_->toc("processing_time", true);
     exportProcess();
-
     // reset flags
     for (auto & det2d : det2d_list_) {
       det2d.is_fused = false;
@@ -335,6 +334,7 @@ void FusionNode<Msg3D, Msg2D, ExportObj>::subCallback(
         static_cast<int64_t>(roi_stamp) < new_stamp &&
         interval > match_threshold_ms_ * static_cast<int64_t>(1e6)) {
         outdate_stamps.push_back(static_cast<int64_t>(roi_stamp));
+        RCLCPP_INFO(this->get_logger(), " 1==============det2d_msgs.erase(stamp);");
       }
     }
     for (auto stamp : outdate_stamps) {
@@ -369,7 +369,6 @@ void FusionNode<Msg3D, Msg2D, ExportObj>::subCallback(
   if (checkAllDet2dFused()) {
     // if all camera fused, postprocess and publish the main message
     exportProcess();
-
     // reset flags
     for (auto & det2d : det2d_list_) {
       det2d.is_fused = false;

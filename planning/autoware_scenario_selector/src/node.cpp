@@ -138,6 +138,9 @@ autoware_planning_msgs::msg::Trajectory::ConstSharedPtr ScenarioSelectorNode::ge
   if (scenario == tier4_planning_msgs::msg::Scenario::PARKING) {
     return parking_trajectory_;
   }
+  if (scenario == tier4_planning_msgs::msg::Scenario::RLPLANNING) {
+    return rl_planning_trajectory_;
+  }
   RCLCPP_ERROR_STREAM(this->get_logger(), "invalid scenario argument: " << scenario);
   return lane_driving_trajectory_;
 }
@@ -157,7 +160,7 @@ std::string ScenarioSelectorNode::selectScenarioByPosition()
     } else if (is_in_parking_lot) {
       return tier4_planning_msgs::msg::Scenario::PARKING;
     }
-    return tier4_planning_msgs::msg::Scenario::LANEDRIVING;
+    return tier4_planning_msgs::msg::Scenario::RLPLANNING;
   }
 
   if (current_scenario_ == tier4_planning_msgs::msg::Scenario::LANEDRIVING) {
@@ -179,6 +182,11 @@ std::string ScenarioSelectorNode::selectScenarioByPosition()
 void ScenarioSelectorNode::updateCurrentScenario()
 {
   const auto prev_scenario = current_scenario_;
+
+  // if (rl_planning_trajectory_ && rl_planning_trajectory_->points.size() > 0) {
+  //   current_scenario_ = tier4_planning_msgs::msg::Scenario::RLPLANNING;
+  //   std::cout << rl_planning_trajectory_ << " " << rl_planning_trajectory_->points.size() << std::endl; 
+  // }
 
   const auto scenario_trajectory = getScenarioTrajectory(current_scenario_);
   const auto is_near_trajectory_end =
@@ -401,11 +409,23 @@ void ScenarioSelectorNode::onLaneDrivingTrajectory(
 {
   lane_driving_trajectory_ = msg;
 
-  if (current_scenario_ != tier4_planning_msgs::msg::Scenario::LANEDRIVING) {
+  if (rl_planning_trajectory_ && rl_planning_trajectory_->points.size() == 0) {
+    trial_count++; 
+  }
+
+  if (rl_mode && trial_count % 30 == 0) {
+    rl_mode = false; 
+    trial_count = 0;
+  }
+
+  if (current_scenario_ != tier4_planning_msgs::msg::Scenario::LANEDRIVING
+      && rl_mode) {
     return;
   }
 
-  publishTrajectory(msg);
+  if (!rl_mode) {
+    publishTrajectory(msg);
+  }
 }
 
 void ScenarioSelectorNode::onParkingTrajectory(
@@ -418,6 +438,20 @@ void ScenarioSelectorNode::onParkingTrajectory(
   }
 
   publishTrajectory(msg);
+}
+
+void ScenarioSelectorNode::onRLPlanningTrajectory(
+  const autoware_planning_msgs::msg::Trajectory::ConstSharedPtr msg)
+{
+  rl_planning_trajectory_ = msg;
+
+  if (!rl_mode && rl_planning_trajectory_->points.size() > 0) {
+    rl_mode = true;
+  } 
+
+  if (rl_mode || current_scenario_ == tier4_planning_msgs::msg::Scenario::RLPLANNING) {
+    publishTrajectory(msg);
+  }
 }
 
 void ScenarioSelectorNode::publishTrajectory(
@@ -449,6 +483,7 @@ ScenarioSelectorNode::ScenarioSelectorNode(const rclcpp::NodeOptions & node_opti
 {
   lane_driving_stop_time_ = {};
   empty_parking_trajectory_time_ = {};
+  rl_traj_received_timestamp_ = rclcpp::Time(0, 0, this->get_clock()->get_clock_type());
 
   // Input
   sub_lane_driving_trajectory_ = this->create_subscription<autoware_planning_msgs::msg::Trajectory>(
@@ -458,6 +493,10 @@ ScenarioSelectorNode::ScenarioSelectorNode(const rclcpp::NodeOptions & node_opti
   sub_parking_trajectory_ = this->create_subscription<autoware_planning_msgs::msg::Trajectory>(
     "input/parking/trajectory", rclcpp::QoS{1},
     std::bind(&ScenarioSelectorNode::onParkingTrajectory, this, std::placeholders::_1));
+
+  sub_rl_planning_trajectory_ = this->create_subscription<autoware_planning_msgs::msg::Trajectory>(
+    "input/rl_planning/trajectory", rclcpp::QoS{1},
+    std::bind(&ScenarioSelectorNode::onRLPlanningTrajectory, this, std::placeholders::_1));
 
   sub_lanelet_map_ = this->create_subscription<autoware_map_msgs::msg::LaneletMapBin>(
     "input/lanelet_map", rclcpp::QoS{1}.transient_local(),

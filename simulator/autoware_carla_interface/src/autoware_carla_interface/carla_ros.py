@@ -15,6 +15,8 @@
 import json
 import math
 import threading
+import cv2
+import numpy as np
 
 from autoware_vehicle_msgs.msg import ControlModeReport
 from autoware_vehicle_msgs.msg import GearReport
@@ -61,6 +63,7 @@ class carla_ros2_interface(object):
         self.pub_lidar = {}
         self.sensor_frequencies = {
             "top": 11,
+            "front": 11, 
             "left": 11,
             "right": 11,
             "camera": 11,
@@ -139,15 +142,15 @@ class carla_ros2_interface(object):
             self.id_to_sensor_type_map[sensor["id"]] = sensor["type"]
             if sensor["type"] == "sensor.camera.rgb":
                 self.pub_camera = self.ros2_node.create_publisher(
-                    Image, "/sensing/camera/traffic_light/image_raw", 1
+                    Image, "/sensing/camera/camera0/image_rect_color", 1
                 )
                 self.pub_camera_info = self.ros2_node.create_publisher(
-                    CameraInfo, "/sensing/camera/traffic_light/camera_info", 1
+                    CameraInfo, "/sensing/camera/camera0/camera_info", 1
                 )
             elif sensor["type"] == "sensor.lidar.ray_cast":
                 if sensor["id"] in self.sensor_frequencies:
                     self.pub_lidar[sensor["id"]] = self.ros2_node.create_publisher(
-                        PointCloud2, f'/sensing/lidar/{sensor["id"]}/pointcloud_before_sync', 10
+                        PointCloud2, f'/sensing/lidar/{sensor["id"]}/pointcloud_raw_ex', 10
                     )
                 else:
                     self.ros2_node.get_logger().info(
@@ -155,7 +158,7 @@ class carla_ros2_interface(object):
                     )
             elif sensor["type"] == "sensor.other.imu":
                 self.pub_imu = self.ros2_node.create_publisher(
-                    Imu, "/sensing/imu/tamagawa/imu_raw", 1
+                    Imu, "/sensing/imu/imu_raw", 1
                 )
             else:
                 self.ros2_node.get_logger().info(f'No Publisher for {sensor["type"]} Sensor')
@@ -189,14 +192,88 @@ class carla_ros2_interface(object):
         nanoseconds = int((self.timestamp - int(self.timestamp)) * 1000000000.0)
         header.stamp = Time(sec=seconds, nanosec=nanoseconds)
         return header
+    
+    #xyzirt
+    # def lidar(self, carla_lidar_measurement, id_):
+    #     """Transform the received lidar measurement into a ROS point cloud message in XYZIRT format."""
+    #     if self.checkFrequency(id_):
+    #         return
+    #     self.publish_prev_times[id_] = datetime.datetime.now()
 
+    #     header = self.get_msg_header(frame_id="velodyne_" + id_)
+    #     fields = [
+    #         PointField(name="x", offset=0, datatype=PointField.FLOAT32, count=1),
+    #         PointField(name="y", offset=4, datatype=PointField.FLOAT32, count=1),
+    #         PointField(name="z", offset=8, datatype=PointField.FLOAT32, count=1),
+    #         PointField(name="intensity", offset=12, datatype=PointField.FLOAT32, count=1),
+    #         PointField(name="ring", offset=16, datatype=PointField.UINT16, count=1),
+    #         PointField(name="time", offset=18, datatype=PointField.FLOAT32, count=1),
+    #     ]
+
+    #     # 원시 데이터 읽기
+    #     lidar_data = numpy.frombuffer(
+    #         carla_lidar_measurement.raw_data, dtype=numpy.float32
+    #     ).reshape(-1, 4)
+
+    #     # 복사본을 만들어서 수정 가능하게 함
+    #     xyz = lidar_data[:, :3].copy()  # xyz를 복사하여 읽기 전용 문제 해결
+
+    #     intensity = numpy.clip(lidar_data[:, 3], 0, 1).reshape(-1, 1).astype(numpy.float32)  # float32
+    #     ring = numpy.empty((0, 1), dtype=numpy.uint16)
+
+    #     self.channels = self.sensors["sensors"]
+    #     for i in range(self.channels[1]["channels"]):
+    #         current_ring_points_count = carla_lidar_measurement.get_point_count(i)
+    #         ring = numpy.vstack(
+    #             (ring, numpy.full((current_ring_points_count, 1), i, dtype=numpy.uint16))
+    #         )
+
+    #     #time = numpy.zeros((xyz.shape[0], 1), dtype=numpy.float32)  # 필요 시 timestamp 계산 가능
+    #     # 타임스탬프 계산: LiDAR 포인트의 상대 시간
+    #     # 시뮬레이션의 시작 시간은 self.timestamp로 주어짐
+    #     # 상대 시간 계산을 위해 각 포인트에 대해 분포된 타임스탬프 생성
+    #     total_points = xyz.shape[0]
+    #     time_start = float(self.timestamp)  # 시작 시간 (초 단위)
+    #     time_end = time_start + 1.0  # 예시: 1초 간격으로 LiDAR 스캔 완료 (필요에 맞게 조정)
+
+    #     # 각 포인트의 상대 시간을 균등 분포로 생성
+    #     time = np.linspace(time_start, time_end, total_points).reshape(-1, 1).astype(np.float32)
+
+    #     # y축 반전 (CARLA 좌표계 보정)
+    #     xyz[:, 1] *= -1
+
+    #     # 최종 포인트 데이터 [x y z intensity ring time]
+    #     full_data = numpy.hstack((xyz, intensity, ring, time))
+
+    #     # 구조화 배열 만들기
+    #     dtype = [
+    #         ("x", "f4"),
+    #         ("y", "f4"),
+    #         ("z", "f4"),
+    #         ("intensity", "f4"),
+    #         ("ring", "u2"),
+    #         ("time", "f4"),
+    #     ]
+
+    #     structured = numpy.zeros(full_data.shape[0], dtype=dtype)
+    #     structured["x"] = full_data[:, 0]
+    #     structured["y"] = full_data[:, 1]
+    #     structured["z"] = full_data[:, 2]
+    #     structured["intensity"] = full_data[:, 3]
+    #     structured["ring"] = full_data[:, 4].astype(numpy.uint16)
+    #     structured["time"] = full_data[:, 5]
+
+    #     point_cloud_msg = create_cloud(header, fields, structured)
+    #     self.pub_lidar[id_].publish(point_cloud_msg)
+
+    ##xyzirc
     def lidar(self, carla_lidar_measurement, id_):
         """Transform the received lidar measurement into a ROS point cloud message."""
         if self.checkFrequency(id_):
             return
         self.publish_prev_times[id_] = datetime.datetime.now()
 
-        header = self.get_msg_header(frame_id="velodyne_top_changed")
+        header = self.get_msg_header(frame_id="velodyne_"+id_)
         fields = [
             PointField(name="x", offset=0, datatype=PointField.FLOAT32, count=1),
             PointField(name="y", offset=4, datatype=PointField.FLOAT32, count=1),
@@ -329,6 +406,32 @@ class carla_ros2_interface(object):
         camera_info.p = [fx, 0.0, cx, 0.0, 0.0, fy, cy, 0.0, 0.0, 0.0, 1.0, 0.0]
         self._camera_info = camera_info
 
+    # def camera(self, carla_camera_data):
+    #     """Transform the received carla camera data into a ROS image and info message and publish."""
+    #     while self.first_:
+    #         self._camera_info_ = self._build_camera_info(carla_camera_data)
+    #         self.first_ = False
+
+    #     if self.checkFrequency("camera"):
+    #         return
+    #     self.publish_prev_times["camera"] = datetime.datetime.now()
+
+    #     image_data_array = numpy.ndarray(
+    #         shape=(carla_camera_data.height, carla_camera_data.width, 4),
+    #         dtype=numpy.uint8,
+    #         buffer=carla_camera_data.raw_data,
+    #     )
+    #     # cspell:ignore interp bgra
+    #     img_msg = self.cv_bridge.cv2_to_imgmsg(image_data_array, encoding="bgra8")
+    #     img_msg.header = self.get_msg_header(
+    #         frame_id="camera0/camera_link"
+    #     )
+    #     cam_info = self._camera_info
+    #     cam_info.header = img_msg.header
+    #     self.pub_camera_info.publish(cam_info)
+    #     self.pub_camera.publish(img_msg)
+
+    #rgb8 엔코딩(캘리브레이션에서 사용)
     def camera(self, carla_camera_data):
         """Transform the received carla camera data into a ROS image and info message and publish."""
         while self.first_:
@@ -339,18 +442,23 @@ class carla_ros2_interface(object):
             return
         self.publish_prev_times["camera"] = datetime.datetime.now()
 
+        # CARLA 카메라 데이터 → BGRA 이미지
         image_data_array = numpy.ndarray(
             shape=(carla_camera_data.height, carla_camera_data.width, 4),
             dtype=numpy.uint8,
             buffer=carla_camera_data.raw_data,
         )
-        # cspell:ignore interp bgra
-        img_msg = self.cv_bridge.cv2_to_imgmsg(image_data_array, encoding="bgra8")
-        img_msg.header = self.get_msg_header(
-            frame_id="traffic_light_left_camera/camera_optical_link"
-        )
+
+        # BGRA → RGB로 변환
+        image_rgb = cv2.cvtColor(image_data_array, cv2.COLOR_BGRA2RGB)
+
+        # ROS Image 메시지로 변환 (encoding: rgb8)
+        img_msg = self.cv_bridge.cv2_to_imgmsg(image_rgb, encoding="rgb8")
+        img_msg.header = self.get_msg_header(frame_id="camera0/camera_link")
+
         cam_info = self._camera_info
         cam_info.header = img_msg.header
+
         self.pub_camera_info.publish(cam_info)
         self.pub_camera.publish(img_msg)
 
@@ -361,7 +469,7 @@ class carla_ros2_interface(object):
         self.publish_prev_times["imu"] = datetime.datetime.now()
 
         imu_msg = Imu()
-        imu_msg.header = self.get_msg_header(frame_id="tamagawa/imu_link_changed")
+        imu_msg.header = self.get_msg_header(frame_id="witmotion/imu_link")
         imu_msg.angular_velocity.x = -carla_imu_measurement.gyroscope.x
         imu_msg.angular_velocity.y = carla_imu_measurement.gyroscope.y
         imu_msg.angular_velocity.z = -carla_imu_measurement.gyroscope.z

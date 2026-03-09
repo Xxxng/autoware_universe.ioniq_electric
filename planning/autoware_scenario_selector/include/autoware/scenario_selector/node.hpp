@@ -62,6 +62,7 @@ public:
   void onRoute(const autoware_planning_msgs::msg::LaneletRoute::ConstSharedPtr msg);
   void onLaneDrivingTrajectory(const autoware_planning_msgs::msg::Trajectory::ConstSharedPtr msg);
   void onParkingTrajectory(const autoware_planning_msgs::msg::Trajectory::ConstSharedPtr msg);
+  void onRLPlanningTrajectory(const autoware_planning_msgs::msg::Trajectory::ConstSharedPtr msg);
   void publishTrajectory(const autoware_planning_msgs::msg::Trajectory::ConstSharedPtr msg);
 
   void updateCurrentScenario();
@@ -95,6 +96,8 @@ private:
   rclcpp::Subscription<autoware_planning_msgs::msg::Trajectory>::SharedPtr
     sub_lane_driving_trajectory_;
   rclcpp::Subscription<autoware_planning_msgs::msg::Trajectory>::SharedPtr sub_parking_trajectory_;
+  rclcpp::Subscription<autoware_planning_msgs::msg::Trajectory>::SharedPtr sub_rl_planning_trajectory_;
+
   rclcpp::Publisher<autoware_planning_msgs::msg::Trajectory>::SharedPtr pub_trajectory_;
   rclcpp::Publisher<tier4_planning_msgs::msg::Scenario>::SharedPtr pub_scenario_;
   rclcpp::Publisher<autoware_internal_debug_msgs::msg::Float64Stamped>::SharedPtr
@@ -110,6 +113,7 @@ private:
   autoware_adapi_v1_msgs::msg::OperationModeState::ConstSharedPtr operation_mode_state_;
   autoware_planning_msgs::msg::Trajectory::ConstSharedPtr lane_driving_trajectory_;
   autoware_planning_msgs::msg::Trajectory::ConstSharedPtr parking_trajectory_;
+  autoware_planning_msgs::msg::Trajectory::ConstSharedPtr rl_planning_trajectory_;
   autoware_planning_msgs::msg::LaneletRoute::ConstSharedPtr route_;
   nav_msgs::msg::Odometry::ConstSharedPtr current_pose_;
   geometry_msgs::msg::TwistStamped::ConstSharedPtr twist_;
@@ -128,6 +132,9 @@ private:
   double th_stopped_velocity_mps_;
   bool enable_mode_switching_;
   bool is_parking_completed_;
+  rclcpp::Time rl_traj_received_timestamp_;
+  int trial_count = 0; 
+  bool rl_mode = false;
 
   boost::optional<rclcpp::Time> lane_driving_stop_time_;
   boost::optional<rclcpp::Time> empty_parking_trajectory_time_;

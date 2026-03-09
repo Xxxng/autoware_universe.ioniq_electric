@@ -1,6 +1,6 @@
 <launch>
   <arg name="input/pointcloud" default="/sensing/lidar/pointcloud"/>
-  <arg name="model" default="model_128"/>
+  <arg name="model" default="model_16"/>
   <arg name="output/objects" default="labeled_clusters"/>
   <arg name="build_only" default="false" description="shutdown node after TensorRT engine file is built"/>
 

@@ -184,7 +184,6 @@ void RoiClusterFusionNode::fuseOnSingleImage(
         associated = true;
       }
     }
-
     if (!associated) {
       continue;
     }
@@ -196,9 +195,9 @@ void RoiClusterFusionNode::fuseOnSingleImage(
       const bool is_roi_iou_over_threshold =
         (is_roi_label_known && iou_threshold_ < max_iou) ||
         (!is_roi_label_known && unknown_iou_threshold_ < max_iou);
-
       if (is_roi_iou_over_threshold && is_roi_existence_prob_higher) {
         fused_object.classification = feature_obj.object.classification;
+
         // Update existence_probability for fused objects
         fused_object.existence_probability =
           std::clamp(feature_obj.object.existence_probability, min_roi_existence_prob_, 1.0f);
